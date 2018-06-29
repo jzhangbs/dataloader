@@ -8,7 +8,7 @@ import argparse
 import os
 import signal
 
-from process import gen_sample_list, split_sample_list, read
+from .process import gen_sample_list, split_sample_list, read
 
 
 class dotdict(dict):
@@ -101,16 +101,17 @@ class Loader:
         while True:
             if phase == 'train':
                 random.shuffle(filename_list)
-            for filename in filename_list:
-                self.filename_queue[phase].put(filename)
+            for idx, filename in enumerate(filename_list):
+                self.filename_queue[phase].put((filename, {'idx': idx}))
 
     def worker(self):
         while True:
-            filename = self.filename_queue[self.phase].get()
+            filename, meta = self.filename_queue[self.phase].get()
             images = read(filename, dotdict(
                 dataset_name=self.dataset_name,
                 phase=self.phase,
-                preproc_args=self.preproc_args
+                preproc_args=self.preproc_args,
+                seed=meta['idx']
             ))
             self.output_queue[self.phase].put(images)
 

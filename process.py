@@ -6,6 +6,7 @@ import glob
 import math
 import random
 from imageio import imread
+from skimage.transform import resize as imresize
 
 
 def load_pfm(file):
@@ -208,26 +209,42 @@ def read(filename, kwargs):
     if kwargs.phase == 'val':
         # return stereo pair
         h, w = left_image.shape[0:2]
-        crop_width = w - w % 16
-        crop_height = h - h % 16
-        start_w = random.randint(0, w - crop_width)
-        start_h = random.randint(0, h - crop_height)
-        finish_w = start_w + crop_width
-        finish_h = start_h + crop_height
-        left_image_crop = left_image[start_h:finish_h, start_w:finish_w]
-        right_image_crop = right_image[start_h:finish_h, start_w:finish_w]
-        disp_image_crop = disp_image[start_h:finish_h, start_w:finish_w]
-        # return stereo pair and disp images
-        return [left_image_crop, right_image_crop, disp_image_crop]
+        # crop_width = w - w % 16
+        # crop_height = h - h % 16
+        crop_width = kwargs.preproc_args.crop_width
+        crop_height = kwargs.preproc_args.crop_height
+        return resize([left_image, right_image, disp_image], crop_height, crop_width, kwargs.seed, kwargs.seed * 2)
     elif kwargs.phase == 'train':
-        # crop images
-        h, w = left_image.shape[0:2]
-        start_w = random.randint(0, w - kwargs.preproc_args.crop_width)
-        start_h = random.randint(0, h - kwargs.preproc_args.crop_height)
-        finish_w = start_w + kwargs.preproc_args.crop_width
-        finish_h = start_h + kwargs.preproc_args.crop_height
-        left_image_crop = left_image[start_h:finish_h, start_w:finish_w]
-        right_image_crop = right_image[start_h:finish_h, start_w:finish_w]
-        disp_image_crop = disp_image[start_h:finish_h, start_w:finish_w]
-        # return stereo pair and disp images
-        return [left_image_crop, right_image_crop, disp_image_crop]
+        return random_crop([left_image, right_image, disp_image],
+                           kwargs.preproc_args.crop_height, kwargs.preproc_args.crop_width)
+
+
+def random_crop(images, height, width, seed_w=None, seed_h=None, *args, **kwargs):
+    left_image, right_image, disp_image = images
+    h, w = left_image.shape[0:2]
+    random.seed(seed_w)
+    start_w = random.randint(0, w - width)
+    random.seed(seed_h)
+    start_h = random.randint(0, h - height)
+    finish_w = start_w + width
+    finish_h = start_h + height
+    left_image_crop = left_image[start_h:finish_h, start_w:finish_w]
+    right_image_crop = right_image[start_h:finish_h, start_w:finish_w]
+    disp_image_crop = disp_image[start_h:finish_h, start_w:finish_w]
+    return [left_image_crop, right_image_crop, disp_image_crop]
+
+
+def resize(images, height, width, *args, **kwargs):
+    left_image, right_image, disp_image = images
+
+    left_scale = np.max(np.abs(left_image))
+    left_image /= left_scale
+    left_image_resize = imresize(left_image, (height, width), mode='reflect')
+    left_image_resize *= left_scale
+
+    right_scale = np.max(np.abs(right_image))
+    right_image /= right_scale
+    right_image_resize = imresize(right_image, (height, width), mode='reflect')
+    right_image_resize *= right_scale
+
+    return [left_image_resize, right_image_resize, disp_image]
